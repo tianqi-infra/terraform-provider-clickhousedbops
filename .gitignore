@@ -1,0 +1,14 @@
+.terraform*
+terraform.tfstate*
+
+terraform-provider-clickhousedbops
+
+node_modules/
+secrets.tfvars
+dev/
+.idea/
+*.backup
+
+**/variables.tfvars
+/tmp/build-errors.log
+/tmp/terraform-provider-clickhouse-rbac
