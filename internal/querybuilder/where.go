@@ -5,7 +5,11 @@ import (
 	"reflect"
 )
 
-func Where(fieldName string, value interface{}) Option {
+type Where interface {
+	Clause() string
+}
+
+func SimpleWhere(fieldName string, value interface{}) Where {
 	return &simpleWhere{
 		field: fieldName,
 		value: value,
@@ -17,10 +21,10 @@ type simpleWhere struct {
 	value interface{}
 }
 
-func (s *simpleWhere) String() string {
+func (s *simpleWhere) Clause() string {
 	if reflect.TypeOf(s.value).String() == "string" {
-		return fmt.Sprintf("WHERE %s = %s", backtick(s.field), quote(s.value.(string)))
+		return fmt.Sprintf("%s = %s", backtick(s.field), quote(s.value.(string)))
 	}
 
-	return fmt.Sprintf("WHERE %s = %v", backtick(s.field), s.value)
+	return fmt.Sprintf("%s = %v", backtick(s.field), s.value)
 }

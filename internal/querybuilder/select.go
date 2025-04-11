@@ -6,21 +6,27 @@ import (
 	"github.com/pingcap/errors"
 )
 
+// SelectQueryBuilder is an interface to build SELECT SQL queries (already interpolated).
+type SelectQueryBuilder interface {
+	QueryBuilder
+	Where(...Where) SelectQueryBuilder
+}
+
 type selectQueryBuilder struct {
 	tableName string
 	fields    []Field
-	options   []Option
+	where     Where
 }
 
-func NewSelect(fields []Field, from string) QueryBuilder {
+func NewSelect(fields []Field, from string) SelectQueryBuilder {
 	return &selectQueryBuilder{
 		fields:    fields,
 		tableName: from,
 	}
 }
 
-func (q *selectQueryBuilder) With(option Option) QueryBuilder {
-	q.options = append(q.options, option)
+func (q *selectQueryBuilder) Where(where ...Where) SelectQueryBuilder {
+	q.where = AndWhere(where...)
 	return q
 }
 
@@ -53,8 +59,9 @@ func (q *selectQueryBuilder) Build() (string, error) {
 		from,
 	}
 
-	for _, o := range q.options {
-		tokens = append(tokens, o.String())
+	// Handle WHERE
+	if q.where != nil {
+		tokens = append(tokens, "WHERE", q.where.Clause())
 	}
 
 	return strings.Join(tokens, " ") + ";", nil
