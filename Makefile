@@ -45,6 +45,9 @@ fmt: ensure-golangci-lint
 	go fmt ./...
 	$(GOLANGCILINT) run --fix --allow-serial-runners
 
+generate:
+	go generate ./...
+
 TFPLUGINDOCS = /tmp/tfplugindocs
 ensure-tfplugindocs: ## Download tfplugindocs locally if necessary.
 	$(call go-get-tool,$(TFPLUGINDOCS),github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs@v0.21.0)
