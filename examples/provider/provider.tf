@@ -1,17 +1,22 @@
 # This file is generated automatically please do not edit
 terraform {
   required_providers {
-    clickhouse = {
-      version = "0.1.0"
-      source  = "ClickHouse/clickhouse"
+    clickhousedbops = {
+      version = "0.1.1"
+      source  = "ClickHouse/clickhousedbops"
     }
   }
 }
 
-# Configuration-based authentication
-# these keys are for example only and won't work when pointed to a deployed ClickHouse OpenAPI server
-provider "clickhouse" {
-  organization_id = "aee076c1-3f83-4637-95b1-ad5a0a825b71"
-  token_key       = "avhj1U5QCdWAE9CA9"
-  token_secret    = "4b1dROiHQEuSXJHlV8zHFd0S7WQj7CGxz5kGJeJnca"
+provider "clickhousedbops" {
+  host = "localhost"
+
+  protocol = "native"
+  port = 9000
+
+  auth_config = {
+    strategy = "password"
+    username = "default"
+    password = "changeme"
+  }
 }
