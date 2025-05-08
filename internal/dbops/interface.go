@@ -8,14 +8,17 @@ type Client interface {
 	CreateDatabase(ctx context.Context, database Database) (*Database, error)
 	GetDatabase(ctx context.Context, uuid string) (*Database, error)
 	DeleteDatabase(ctx context.Context, uuid string) error
+	FindDatabaseByName(ctx context.Context, name string) (*Database, error)
 
 	CreateRole(ctx context.Context, role Role) (*Role, error)
 	GetRole(ctx context.Context, id string) (*Role, error)
 	DeleteRole(ctx context.Context, id string) error
+	FindRoleByName(ctx context.Context, name string) (*Role, error)
 
 	CreateUser(ctx context.Context, user User) (*User, error)
 	GetUser(ctx context.Context, id string) (*User, error)
 	DeleteUser(ctx context.Context, id string) error
+	FindUserByName(ctx context.Context, name string) (*User, error)
 
 	GrantRole(ctx context.Context, grantRole GrantRole) (*GrantRole, error)
 	GetGrantRole(ctx context.Context, grantedRoleName string, granteeUserName *string, granteeRoleName *string) (*GrantRole, error)
