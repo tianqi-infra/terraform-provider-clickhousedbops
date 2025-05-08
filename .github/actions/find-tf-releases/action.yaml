@@ -1,0 +1,25 @@
+name: "Find terraform releases"
+description: "Return names of latest terraform cli releases"
+inputs:
+  min:
+    required: false
+    default: ""
+    description: "The min version to consider, expressed in semver format"
+  count:
+    required: false
+    default: "3"
+    description: "The number of releases to return"
+
+outputs:
+  versions:
+    description: "The json encoded array of release names"
+    value: ${{steps.find-tf-releases.outputs.versions}}
+
+runs:
+  using: "composite"
+  steps:
+    - shell: bash
+      id: find-tf-releases
+      run: |
+        chmod +x .github/actions/find-tf-releases/action.sh
+        .github/actions/find-tf-releases/action.sh --min="${{inputs.min}}" --want="${{inputs.want}}"

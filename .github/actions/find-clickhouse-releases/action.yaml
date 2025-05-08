@@ -1,0 +1,17 @@
+name: "Find clickhouse releases"
+description: "Return names of latest clickhouse releases"
+inputs: {}
+
+outputs:
+  versions:
+    description: "The json encoded array of release names"
+    value: ${{steps.find-ch-releases.outputs.versions}}
+
+runs:
+  using: "composite"
+  steps:
+    - shell: bash
+      id: find-ch-releases
+      run: |
+        chmod +x .github/actions/find-clickhouse-releases/action.sh
+        .github/actions/find-clickhouse-releases/action.sh
