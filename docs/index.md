@@ -13,6 +13,7 @@ description: |-
 ## Example Usage
 
 ```terraform
+# This file is generated automatically please do not edit
 terraform {
   required_providers {
     clickhousedbops = {
