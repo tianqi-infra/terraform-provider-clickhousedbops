@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -48,6 +49,13 @@ func (r *Resource) Metadata(_ context.Context, req resource.MetadataRequest, res
 func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
+			"cluster_name": schema.StringAttribute{
+				Optional:    true,
+				Description: "Name of the cluster to create the database into. If omitted, the database will be created on the replica hit by the query. Should always be set when hitting a cluster with more than one replica.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
 			"uuid": schema.StringAttribute{
 				Computed:    true,
 				Description: "The system-assigned UUID for the database",
@@ -94,7 +102,7 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		return
 	}
 
-	db, err := r.client.CreateDatabase(ctx, dbops.Database{Name: plan.Name.ValueString(), Comment: plan.Comment.ValueString()})
+	db, err := r.client.CreateDatabase(ctx, dbops.Database{Name: plan.Name.ValueString(), Comment: plan.Comment.ValueString()}, plan.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error creating database",
@@ -103,11 +111,19 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		return
 	}
 
-	state, err := r.syncDatabaseState(ctx, db.UUID)
+	state, err := r.syncDatabaseState(ctx, db.UUID, plan.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error syncing database",
 			fmt.Sprintf("%+v\n", err),
+		)
+		return
+	}
+
+	if state == nil {
+		resp.Diagnostics.AddError(
+			"Error syncing database",
+			"failed retrieving database after creation",
 		)
 		return
 	}
@@ -127,7 +143,7 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		return
 	}
 
-	state, err := r.syncDatabaseState(ctx, plan.UUID.ValueString())
+	state, err := r.syncDatabaseState(ctx, plan.UUID.ValueString(), plan.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error syncing database",
@@ -136,10 +152,14 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		return
 	}
 
-	diags = resp.State.Set(ctx, state)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return
+	if state == nil {
+		resp.State.RemoveResource(ctx)
+	} else {
+		diags = resp.State.Set(ctx, state)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
 	}
 }
 
@@ -155,7 +175,7 @@ func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp 
 		return
 	}
 
-	err := r.client.DeleteDatabase(ctx, plan.UUID.ValueString())
+	err := r.client.DeleteDatabase(ctx, plan.UUID.ValueString(), plan.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error deleting database",
@@ -166,13 +186,22 @@ func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp 
 }
 
 func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	// This resource can be imported by specifying either the name or the UUID of the database.
-	// Check if user input is a UUID
-	_, err := uuid.Parse(req.ID)
+	// req.ID can either be in the form <cluster name>:<database ref> or just <database ref>
+	// database ref can either be the name or the UUID of the database.
+
+	// Check if cluster name is specified
+	ref := req.ID
+	var clusterName *string
+	if strings.Contains(req.ID, ":") {
+		clusterName = &strings.Split(req.ID, ":")[0]
+		ref = strings.Split(req.ID, ":")[1]
+	}
+
+	// Check if ref is a UUID
+	_, err := uuid.Parse(ref)
 	if err != nil {
 		// Failed parsing UUID, try importing using the database name
-
-		db, err := r.client.FindDatabaseByName(ctx, req.ID)
+		db, err := r.client.FindDatabaseByName(ctx, ref, clusterName)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Cannot find database",
@@ -184,15 +213,24 @@ func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequ
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("uuid"), db.UUID)...)
 	} else {
 		// User passed a UUID
-		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("uuid"), req.ID)...)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("uuid"), ref)...)
+	}
+
+	if clusterName != nil {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cluster_name"), clusterName)...)
 	}
 }
 
 // syncDatabaseState reads database settings from clickhouse and returns a DatabaseResourceModel
-func (r *Resource) syncDatabaseState(ctx context.Context, uuid string) (*Database, error) {
-	db, err := r.client.GetDatabase(ctx, uuid)
+func (r *Resource) syncDatabaseState(ctx context.Context, uuid string, clusterName *string) (*Database, error) {
+	db, err := r.client.GetDatabase(ctx, uuid, clusterName)
 	if err != nil {
 		return nil, errors.WithMessage(err, "cannot get database")
+	}
+
+	if db == nil {
+		// Database not found.
+		return nil, nil
 	}
 
 	comment := types.StringNull()
@@ -201,9 +239,10 @@ func (r *Resource) syncDatabaseState(ctx context.Context, uuid string) (*Databas
 	}
 
 	state := &Database{
-		UUID:    types.StringValue(db.UUID),
-		Name:    types.StringValue(db.Name),
-		Comment: comment,
+		ClusterName: types.StringPointerValue(clusterName),
+		UUID:        types.StringValue(db.UUID),
+		Name:        types.StringValue(db.Name),
+		Comment:     comment,
 	}
 
 	return state, nil
