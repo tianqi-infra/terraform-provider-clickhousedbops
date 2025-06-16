@@ -62,7 +62,7 @@ func (p *Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp 
 				Required:    true,
 				Description: "The hostname to use to connect to the clickhouse instance",
 			},
-			"port": schema.NumberAttribute{
+			"port": schema.Int32Attribute{
 				Required:    true,
 				Description: "The port to use to connect to the clickhouse instance",
 			},
@@ -107,21 +107,26 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 		return
 	}
 
+	if data.Host.IsUnknown() || data.Protocol.IsUnknown() || data.Port.IsUnknown() || data.AuthConfig.Strategy.IsUnknown() || data.AuthConfig.Username.IsUnknown() {
+		// We don't know the service data yet.
+		return
+	}
+
 	var clickhouseClient clickhouseclient.ClickhouseClient
 	{
-		switch data.Protocol {
+		switch data.Protocol.ValueString() {
 		case protocolNative:
 			fallthrough
 		case protocolNativeSecure:
 			var auth *clickhouseclient.UserPasswordAuth
-			switch data.AuthConfig.Strategy {
+			switch data.AuthConfig.Strategy.ValueString() {
 			case authStrategyPassword:
 				auth = &clickhouseclient.UserPasswordAuth{
-					Username: data.AuthConfig.Username,
+					Username: data.AuthConfig.Username.ValueString(),
 				}
 
-				if data.AuthConfig.Password != nil {
-					auth.Password = *data.AuthConfig.Password
+				if !data.AuthConfig.Password.IsNull() {
+					auth.Password = data.AuthConfig.Password.ValueString()
 				}
 
 				valid, errorStrings := auth.ValidateConfig()
@@ -133,24 +138,37 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 				return
 			}
 
+			var port uint16
+			{
+				if !data.Port.IsUnknown() {
+					portVal := data.Port.ValueInt32()
+					if portVal <= 0 || portVal > 65535 {
+						resp.Diagnostics.AddError("invalid configuration", fmt.Sprintf("invalid port %s.", data.Port.String()))
+						return
+					}
+
+					port = uint16(portVal)
+				}
+			}
+
 			clickhouseClient, err = clickhouseclient.NewNativeClient(clickhouseclient.NativeClientConfig{
-				Host:             data.Host,
-				Port:             data.Port,
+				Host:             data.Host.ValueString(),
+				Port:             port,
 				UserPasswordAuth: auth,
-				EnableTLS:        data.Protocol == protocolNativeSecure,
+				EnableTLS:        data.Protocol.ValueString() == protocolNativeSecure,
 			})
 		case protocolHTTP:
 			fallthrough
 		case protocolHTTPS:
 			var auth *clickhouseclient.BasicAuth
-			switch data.AuthConfig.Strategy {
+			switch data.AuthConfig.Strategy.ValueString() {
 			case authStrategyBasicAuth:
 				auth = &clickhouseclient.BasicAuth{
-					Username: data.AuthConfig.Username,
+					Username: data.AuthConfig.Username.ValueString(),
 				}
 
-				if data.AuthConfig.Password != nil {
-					auth.Password = *data.AuthConfig.Password
+				if !data.AuthConfig.Password.IsNull() {
+					auth.Password = data.AuthConfig.Password.ValueString()
 				}
 
 				valid, errorStrings := auth.ValidateConfig()
@@ -162,13 +180,26 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 				return
 			}
 
+			var port uint16
+			{
+				if !data.Port.IsUnknown() {
+					portVal := data.Port.ValueInt32()
+					if portVal <= 0 || portVal > 65535 {
+						resp.Diagnostics.AddError("invalid configuration", fmt.Sprintf("invalid port %s.", data.Port.String()))
+						return
+					}
+
+					port = uint16(portVal)
+				}
+			}
+
 			config := clickhouseclient.HTTPClientConfig{
-				Host:      data.Host,
-				Port:      data.Port,
+				Host:      data.Host.ValueString(),
+				Port:      port,
 				BasicAuth: auth,
 			}
 
-			if data.Protocol == protocolHTTPS {
+			if data.Protocol.ValueString() == protocolHTTPS {
 				config.Protocol = "https"
 			}
 
