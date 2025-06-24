@@ -1,13 +1,17 @@
 #!/bin/bash
 
+EXAMPLE=""
 CLICKHOUSE_VERSION=""
 TERRAFORM_IMAGE=""
 TERRAFORM_VERSION=""
 PROTOCOL=""
-CLUSTER_NAME=""
+CLUSTER_TYPE=""
 
 for arg in "$@"; do
   case "$arg" in
+    --example=*)
+      EXAMPLE="${arg#*=}"
+      ;;
     --clickhouse-version=*)
       CLICKHOUSE_VERSION="${arg#*=}"
       ;;
@@ -20,8 +24,8 @@ for arg in "$@"; do
     --protocol=*)
       PROTOCOL="${arg#*=}"
       ;;
-    --cluster-name=*)
-      CLUSTER_NAME="${arg#*=}"
+    --cluster-type=*)
+      CLUSTER_TYPE="${arg#*=}"
       ;;
     *)
       echo "Unknown parameter: $arg"
@@ -30,29 +34,40 @@ for arg in "$@"; do
   esac
 done
 
+if [ "$EXAMPLE" == "" ]
+then
+  echo "--example=<example name> is required"
+  exit 1
+fi
+
 if [ "$CLICKHOUSE_VERSION" == "" ]
 then
   echo "--clickhouse-version=<version> is required"
+  exit 1
 fi
 
 if [ "$TERRAFORM_VERSION" == "" ]
 then
   echo "--terraform-version=<version> is required"
+  exit 1
 fi
 
 if [ "$TERRAFORM_IMAGE" == "" ]
 then
   echo "--terraform-image=<image> is required"
+  exit 1
 fi
 
 if [ "$PROTOCOL" == "" ]
 then
   echo "--protocol=<http|native> is required"
+  exit 1
 fi
 
-if [ "$CLUSTER_NAME" == "" ]
+if [ "$CLUSTER_TYPE" == "" ]
 then
-  echo "--cluster-name=<name> is required"
+  echo "--cluster-type=<type> is required"
+  exit 1
 fi
 
 #############################################################################################
@@ -62,6 +77,8 @@ export CLICKHOUSE_VERSION="$CLICKHOUSE_VERSION"
 export TFVER="$TERRAFORM_VERSION"
 export TFIMG="$TERRAFORM_IMAGE"
 export TF_VAR_protocol="$PROTOCOL"
+export TF_VAR_host="tests-clickhouse-1"
+export CONFIGFILE="config-${CLUSTER_TYPE}.xml"
 
 case "$TF_VAR_protocol" in
   native)
@@ -74,13 +91,25 @@ case "$TF_VAR_protocol" in
     ;;
 esac
 
-case "${CLUSTER_NAME}" in
-  null)
-  export TF_VAR_host=clickhouse
+case "${CLUSTER_TYPE}" in
+  single)
+  export REPLICAS=1
+  ;;
+  replicated)
+  export REPLICAS=2
+  if [ "${EXAMPLE}" == "database" ]
+  then
+    # Even in replicated setups, the database resource need the CLUSTER_TYPE to be set.
+    export TF_VAR_cluster_name="cluster1"
+  fi
+  ;;
+  localfile)
+  export REPLICAS=2
+  export TF_VAR_cluster_name="cluster1"
   ;;
   *)
-  export TF_VAR_host=ch01
-  export TF_VAR_cluster_name="${CLUSTER_NAME}"
+  echo "Invalid cluster type ${CLUSTER_TYPE}"
+  exit 1
 esac
 
 # This is needed until docker compose 1.36 to avoid concurrent map write error.
@@ -99,4 +128,3 @@ for svc in clickhouse shell ; do
 done
 
 docker compose exec clickhouse clickhouse client --password "test" "select version()"
-docker compose exec ch01 clickhouse client --password "test" "select version()"
