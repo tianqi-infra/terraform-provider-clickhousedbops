@@ -30,8 +30,11 @@ install: build
 	mv ${BINARY} ~/.terraform.d/plugins/${HOSTNAME}/${NAMESPACE}/${NAME}/${VERSION}/${OS_ARCH}
 
 test: 
-	go test -i $(TEST) || exit 1                                                   
-	echo $(TEST) | xargs -t -n4 go test $(TESTARGS) -timeout=30s -parallel=4                    
+	go test -i $(TEST) || exit 1
+	echo $(TEST) | xargs -t -n4 go test $(TESTARGS) -timeout=30s -parallel=4 -skip ".*_acceptance"
+
+tftest:
+	TF_ACC=1 go test -v -run Test.*_acceptance ./pkg/resource/...
 
 enable_git_hooks: ## Add githooks for code validation before commit, as symlink so they get updated automatically
 	mkdir -p .git/hooks
