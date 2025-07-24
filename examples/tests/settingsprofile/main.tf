@@ -21,6 +21,14 @@ resource "clickhousedbops_settingsprofile" "profile1" {
   ]
 }
 
+
+resource "clickhousedbops_role" "tester" {
+  cluster_name = var.cluster_name
+  name = "tester"
+  
+  settings_profile = clickhousedbops_settingsprofile.profile1.name
+}
+
 resource "clickhousedbops_user" "john" {
   cluster_name = var.cluster_name
   name = "john"

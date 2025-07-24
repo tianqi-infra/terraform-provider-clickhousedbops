@@ -7,7 +7,6 @@ import (
 func Test_createuser(t *testing.T) {
 	tests := []struct {
 		name            string
-		action          string
 		resourceName    string
 		identifiedWith  Identification
 		identifiedBy    string
