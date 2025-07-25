@@ -56,16 +56,10 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 			"name": schema.StringAttribute{
 				Required:    true,
 				Description: "Name of the role",
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
 			},
 			"settings_profile": schema.StringAttribute{
 				Optional:    true,
 				Description: "Name of the settings profile to assign to the role",
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
 			},
 		},
 		MarkdownDescription: roleResourceDescription,
@@ -175,7 +169,37 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 }
 
 func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	panic("Update of role resource is not supported")
+	var plan, state Role
+	diags := req.State.Get(ctx, &state)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	diags = req.Plan.Get(ctx, &plan)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Settings profile is changed.
+	role, err := r.client.UpdateRole(ctx, dbops.Role{
+		ID:              state.ID.ValueString(),
+		Name:            plan.Name.ValueString(),
+		SettingsProfile: plan.SettingsProfile.ValueStringPointer(),
+	}, plan.ClusterName.ValueStringPointer())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Updating ClickHouse Role",
+			fmt.Sprintf("%+v\n", err),
+		)
+		return
+	}
+
+	state.Name = types.StringValue(role.Name)
+	state.SettingsProfile = types.StringPointerValue(role.SettingsProfile)
+	diags = resp.State.Set(ctx, &state)
+	resp.Diagnostics.Append(diags...)
 }
 
 func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
