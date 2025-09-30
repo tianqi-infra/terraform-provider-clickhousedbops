@@ -69,7 +69,7 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 				Validators: []validator.String{
 					stringvalidator.RegexMatches(regexp.MustCompile(`^[a-fA-F0-9]{64}$`), "password_sha256_hash must be a valid SHA256 hash"),
 				},
-				WriteOnly: true,
+				WriteOnly: false,
 			},
 			"password_sha256_hash_wo_version": schema.Int32Attribute{
 				Required:    true,
@@ -160,6 +160,7 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		ClusterName:               plan.ClusterName,
 		ID:                        types.StringValue(createdUser.ID),
 		Name:                      types.StringValue(createdUser.Name),
+		PasswordSha256Hash:        types.StringValue(user.PasswordSha256Hash),
 		PasswordSha256HashVersion: plan.PasswordSha256HashVersion,
 	}
 
