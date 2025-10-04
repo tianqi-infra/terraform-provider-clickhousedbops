@@ -10,4 +10,3 @@ dev/
 **/variables.tfvars
 /tmp/build-errors.log
 /tmp/terraform-provider-clickhousedbops
-/terraform-provider-clickhousedbops

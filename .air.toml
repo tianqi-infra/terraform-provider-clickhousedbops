@@ -5,7 +5,7 @@ tmp_dir = "tmp"
 [build]
   args_bin = []
   bin = "./tmp/terraform-provider-clickhousedbops"
-  cmd = "go build -o ./tmp/terraform-provider-clickhousedbops ."
+  cmd = "GOOS=linux GOARCH=arm64 go build -o ./tmp/terraform-provider-clickhousedbops ."
   delay = 1000
   exclude_dir = ["tmp"]
   exclude_file = []
